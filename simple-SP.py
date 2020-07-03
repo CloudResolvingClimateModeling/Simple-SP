@@ -102,7 +102,6 @@ def evolve(grid, time):
 
 # upwind advection of quantity q, with velocity u
 # assuming velocity is positive and constant in x, y 
-
 def advect(q, u, dx, dt):
     # boundaries are NOT periodic, and probably inconsistent. the leftmost value does not change.
     #dq = (q[:,:-1, :] - q[:, 1:, :]) * u * dt / dx
@@ -141,34 +140,6 @@ def make_bubble(grid, r, center, gaussian=False):# r, center are quantities, i.e
         return numpy.exp(-rr/(2*r**2))
     else:
         return numpy.where (rr < r*r, 1, 0)
-
-def make_bubble_old(grid, r, center=None, gaussian=False):
-    if center is None:
-        ci = ((numpy.array(grid.THL.shape) - 1)*.5)
-        ci = (int(ci[0]), int(ci[1]), int(ci[2]))
-        print('ci', ci)
-        center=(grid[ci].x.value_in(units.m), grid[ci].y.value_in(units.m), grid[ci].z.value_in(units.m))
-        print ('center', center)
-    else:
-        center = [c.value_in(units.m) for c in center]
-        
-    X = grid[:,0,0].x.value_in(units.m) # fetch coordinate grids once, for speed
-    Y = grid[0,:,0].y.value_in(units.m) # drop the units here for faster calculation below
-    Z = grid[0,0,:].z.value_in(units.m)
-    r = r.value_in(units.m)
-    
-    bubble = numpy.zeros(grid.THL.shape)
-    for index, v in numpy.ndenumerate(bubble):
-        i,j,k = index
-        x = X[i] - center[0]
-        y = Y[j] - center[1]
-        z = Z[k] - center[2]
-        rr = x**2 + y**2 + z**2    
-        if gaussian:
-            bubble[index] = numpy.exp(-rr/(2*r**2))
-        else:
-            bubble[index] = 1 if (rr <= r*r) else 0
-    return bubble
 
 # try without units, for speed.    
 def variability_nudge(les, ql_ref, DT, constantT=False):
@@ -212,8 +183,8 @@ def variability_nudge(les, ql_ref, DT, constantT=False):
         return result
     
     # beta[k] is a factor by which we multiply the qt variability of layer k
-    beta_min = 0  # search interval
-    beta_max = 5  # also limit for when to switch from multiplicative to additive noise
+    beta_min = 0  # search interval beta_min...beta_max
+    beta_max = 5  # above beta_max, switch from multiplicative to additive noise
 
     beta = numpy.ones(les.parameters_DOMAIN.kmax)
     for k in range(0, les.parameters_DOMAIN.kmax):
@@ -239,7 +210,7 @@ def variability_nudge(les, ql_ref, DT, constantT=False):
                 print('brent took %5.2f ms'%((time.time()-tt)*1000))
                 
         elif ql_av[k] > ql_ref[k]:  # The GCM says no clouds, or very little, and the LES has more than this.
-            # Nudge towards barely unsaturated.
+            # Nudge towards just below saturation.
             i, j = numpy.unravel_index(numpy.argmax(qt[:, :, k] - qsat[:, :, k]), qt[:, :, k].shape)
             beta[k] = (qsat[i, j, k] - qt_av[k]) / (qt[i, j, k] - qt_av[k])
             # print (qt[i,j,k].value_in(units.mfu))
@@ -258,9 +229,6 @@ def variability_nudge(les, ql_ref, DT, constantT=False):
         else:
             continue  # no clouds, no nudge - don't print anything
 
- #       log.info('k: %3d ql_diff: %e, ql_ref: %e, beta:%f, alpha:%f'%(k, current_ql_diff,
- #                                                                     ql_ref[k].value_in(units.shu), beta[k],  numpy.log(beta[k]) / DT.value_in(units.s)))
-        #print(k, current_ql_diff, ql_ref[k].value_in(units.shu), beta[k],  numpy.log(beta[k]) / DT.value_in(units.s))
         if beta[k] >= beta_max:
             log.info('  beta %f too large at %3d'%(beta[k], k))
 
@@ -270,7 +238,8 @@ def variability_nudge(les, ql_ref, DT, constantT=False):
             a_min = 0
             a_max = 5
             tt = time.time()
-            log.info('ql_diff min:%f, max:%f. ql_ref[k] %f  current_ql_diff:%f'%(get_ql_diff_additive(a_min),get_ql_diff_additive(a_max), ql_ref[k], current_ql_diff))
+            log.info('ql_diff min:%f, max:%f. ql_ref[k] %f  current_ql_diff:%f'%
+                     (get_ql_diff_additive(a_min),get_ql_diff_additive(a_max), ql_ref[k], current_ql_diff))
             log.info('ql_av: %f'%(ql_av[k]))
             if ql_ref[k] > ql_av[k]:
                 a = brentq(get_ql_diff_additive, a_min, a_max)
@@ -296,154 +265,12 @@ def variability_nudge(les, ql_ref, DT, constantT=False):
             thl[:,:,k] += dTHL
             #les.fields[:,:,k].THL += dTHL | units.K
 
-            
     les.fields.QT = qt
     if constantT:
         les.fields.THL = thl | units.K
-    
-    ## gradual adjustment over time   !! NOTE !!  no THL adjustment here yet    
-    alpha = (numpy.log(beta) / DT.value_in(units.s)) # .minimum(0.05 | units.s**-1)
-    #print ('Setting alpha', alpha)
-    #les.set_qt_variability_factor(alpha)
 
-    qt_std = qt.std(axis=(0, 1))
-#    if write:
-#        spio.write_les_data(les, qt_alpha=alpha)
-#        spio.write_les_data(les, qt_beta=beta, qt_std=qt_std)
-
-        
-# from 4.9.2019
-# still with units
-def variability_nudge_older(les, ql_ref, DT, constantT=False):
-    # this cannot be used before the LES has been stepped - otherwise qsat and ql are not defined.
-
-    itot, jtot = les.get_itot(), les.get_jtot()
-        
-    # random field to be used for additive noise when variability is very small
-    # want same noise for each horizontal plane, to give correlation between different layers
-    R = numpy.random.normal(size=(itot, jtot)) # gaussian random field, mean=0, standard deviation=1
-    R -= R.sum()/(itot*jtot)  # adjust average of R to be exactly 0
-    
-    # possibly add spatial correlation
-    # R = scipy.ndimage.filters.gaussian_filter(R, sigma=2, mode='wrap')
-    # should normalize so that st-dev = 1 if we want a to be st.dev later on
-     
-    qsat = les.get_field("Qsat")
-    qt = les.get_field("QT")
-    ql2 = les.get_profile("QL")
-
-    qt_av = les.get_profile("QT")
-    p = les.get_presf()
-
-
-    ql = (qt - qsat).maximum(0 | units.mfu).sum(axis=(0, 1)) / (itot * jtot)  # ql profile
-
-    ql_field = les.get_field("QL")
-
-    # strangely, this doesn't have a unit
-    # the part before / has the unit mfu
-    # mfu is dimensionless - might be the reason.
-    # use mean instead of sum / size  ?
-
-    # ql_ref has unit mfu
-
-    # print('---', les.lat, les.lon, '---')
-    # print(les.QL)
-    # print(les.ql_ref)
-    # print(ql)
-    # print(ql2)
-    # print(les.get_itot(), les.get_jtot())
-    # print ('---------')
-
-    # get ql difference
-    # note the implicit k, qt, qt_av, qsat variables
-    # returns ql(beta) - ql_ref
-    def get_ql_diff(beta):
-        result = (beta * (qt[:, :, k] - qt_av[k]) + qt_av[k] - qsat[:, :, k]).maximum(0 | units.mfu).sum() / (
-                itot * jtot) - ql_ref[k]
-        return result.number
-
-    # get ql difference when using additive noise in R
-    # note the implicit k, qt, R, qsat variables
-    # returns ql(a) - ql_ref
-    def get_ql_diff_additive(a):
-        result = (qt[:, :, k] + ((a | units.mfu) * R[:,:]) - qsat[:, :, k]).maximum(0 | units.mfu).sum() / (
-                itot * jtot) - ql_ref[k]
-        return result.number
-    
-
-    beta_min = 0  # search interval
-    beta_max = 5  # also limit for when to switch from multiplicative to additive noise
-
-    beta = numpy.ones(les.parameters_DOMAIN.kmax)
-    for k in range(0, les.parameters_DOMAIN.kmax):
-        current_ql_diff = get_ql_diff(1)
-
-        if ql_ref[k] > 1e-9:  # significant amount of clouds in the GCM. Nudge towards this amount.
-            # print (k, 'significant ql_ref')
-            q_min = get_ql_diff(beta_min)
-            q_max = get_ql_diff(beta_max)
-            if q_min > 0 or q_max < 0:
-                print("k:%d didn't bracket a zero. qmin:%f, qmax:%f, qt_avg:%f, stdev(qt):%f " %
-                         (k, q_min, q_max, numpy.mean(qt[:, :, k]).number, numpy.std(qt[:, :, k]).number))
-                # seems to happen easily in the sponge layer, where the variability is kept small
-                beta[k] = beta_max # take the largest beta, will trigger use of additive noise below.
-            else:
-                beta[k] = brentq(get_ql_diff, beta_min, beta_max)
-
-        elif ql[k] > ql_ref[k]:  # The GCM says no clouds, or very little, and the LES has more than this.
-            # Nudge towards barely unsaturated.
-            i, j = numpy.unravel_index(numpy.argmax(qt[:, :, k] - qsat[:, :, k]), qt[:, :, k].shape)
-            beta[k] = (qsat[i, j, k] - qt_av[k]) / (qt[i, j, k] - qt_av[k])
-            # print (qt[i,j,k].value_in(units.mfu))
-            # print (qsat[i,j,k].value_in(units.mfu))
-            # print(qt_av[k].value_in(units.mfu))
-            # print(ql[k].value_in(units.mfu))
-            # print(les.ql_ref[k].value_in(units.mfu))
-            print(
-                '%d nudging towards non-saturation. Max at (%d,%d). qt:%f, qsat:%f, qt_av[k]:%f, beta:%f, ql_avg:%f, '
-                'ql_ref:%f' % (k, i, j, qt[i, j, k].value_in(units.mfu), qsat[i, j, k].value_in(units.mfu),
-                               qt_av[k].value_in(units.mfu), beta[k], ql[k], ql_ref[k].value_in(units.mfu)))
-            if beta[k] < 0:
-                # this happens when qt_av > qsat
-                print('  beta<0, setting beta=1 ')
-                beta[k] = 1
-        else:
-            continue  # no nudge - don't print anything
-
-        print ('k: %3d ql_diff: %e, ql_ref: %e, beta:%f, alpha:%f'%(k, current_ql_diff, ql_ref[k].value_in(units.shu), beta[k],  numpy.log(beta[k]) / DT.value_in(units.s)))
-        #print(k, current_ql_diff, ql_ref[k].value_in(units.shu), beta[k],  numpy.log(beta[k]) / DT.value_in(units.s))
-        if beta[k] >= beta_max:
-            print('  beta too large at', k)
-            beta[k] = 1 # don't do any multiplicative nudging on this layer
-
-            # try additive noise instead
-            a_min = 0
-            a_max = 2
-            a = brentq(get_ql_diff_additive, a_min, a_max)
-            print('  additive noise st.dev a = ', a)
-            dQT = (a|units.mfu) * R
-            ql_target = (beta[k] * (qt[:, :, k] - qt_av[k]) + qt_av[k] - qsat[:, :, k]).maximum(0 | units.mfu)
-            dQL = ql_target - ql_field[:,:,k]
-            dTHL = - rlv / (cp * exner(p[k])) * dQL
-            les.fields[:,:,k].QT += dQT
-            if constantT:
-                les.fields[:,:,k].THL += dTHL
-            
-    # immediate adjustment of the qt field
-    for k in range(0, les.parameters_DOMAIN.kmax):
-        dQT = (beta[k]-1) * (qt[:,:,k] - qt_av[k])
-
-        ql_target = (beta[k] * (qt[:, :, k] - qt_av[k]) + qt_av[k] - qsat[:, :, k]).maximum(0 | units.mfu)
-        dQL = ql_target - ql_field[:,:,k]
-        dTHL = - rlv / (cp * exner(p[k])) * dQL
-        les.fields[:,:,k].QT +=  dQT
-        if constantT:
-            les.fields[:,:,k].THL += dTHL
-
-    # gradual adjustment over time   !! NOTE !!  no THL adjustment here yet
-    
-    #alpha = (numpy.log(beta) / DT) # .minimum(0.05 | units.s**-1)
+    ## gradual adjustment over time   !! NOTE !!  no THL adjustment here yet
+    #alpha = (numpy.log(beta) / DT.value_in(units.s)) # .minimum(0.05 | units.s**-1)
     #print ('Setting alpha', alpha)
     #les.set_qt_variability_factor(alpha)
 
@@ -596,14 +423,14 @@ def run_single(steps=60, DT=60 | units.s, n=25, nx=4, ny=1, qt_delta=0|units.g/u
 
 # add moist bubble at leftmost grid point
 
-A = 1 | units.g/units.kg
+A = 1.5 | units.g/units.kg
 
 #run       (steps=30, DT=60 | units.s, nx=4, ny=1,  couple=False, name='bubble', bubble=True, bubbleA=A)
 run       (steps=30, DT=60 | units.s, nx=4, ny=1, couple=True, name='bubble-coupled', bubble=True, bubbleA=A)
 run_single(steps=30, DT=60 | units.s, nx=4, ny=1, name='bubble-single', bubble=True, bubbleA=A)
 
 # with variance nudging
-run       (steps=30, DT=60 | units.s, nx=4, ny=1, couple=True, name='bubble-coupled-var', bubble=True, bubbleA=A, nudge='variance')
+# run       (steps=30, DT=60 | units.s, nx=4, ny=1, couple=True, name='bubble-coupled-var', bubble=True, bubbleA=A, nudge='variance')
 # with variance nudging at constant T
 run       (steps=30, DT=60 | units.s, nx=4, ny=1, couple=True, name='bubble-coupled-var-T', bubble=True, bubbleA=A, nudge='variance', constantT=True)
 
@@ -611,7 +438,7 @@ run       (steps=30, DT=60 | units.s, nx=4, ny=1, couple=True, name='bubble-coup
 #run       (steps=30, DT=60 | units.s, spinup=3600 | units.s, nx=4, ny=1, couple=True, name='bubble-coupled-var-spinup', bubble=True, bubbleA=A, nudge='variance')
 
 # with strong nudging
-run       (steps=30, DT=60 | units.s, nx=4, ny=1, couple=True, name='bubble-coupled-strong', bubble=True, bubbleA=A, nudge='strong')
+# run       (steps=30, DT=60 | units.s, nx=4, ny=1, couple=True, name='bubble-coupled-strong', bubble=True, bubbleA=A, nudge='strong')
 
 
 
