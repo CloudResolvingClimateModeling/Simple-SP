@@ -14,8 +14,8 @@ from netCDF4 import Dataset, num2date, date2index # pip install netCDF4
 # assuming each Dales was run with one process - no merging implemented in this script yet
 # Each row is one time point, columns show different DALES.
 
-mplparams = {"figure.figsize" : [3, 4.5],     # figure size in inches
-                 "figure.dpi"     :  200,     # figure dots per inch
+mplparams = {"figure.figsize" : [3.47, 3.8],    # figure size in inches
+                 "figure.dpi"     :  300,     # figure dots per inch
                  "font.size"      :  6,       # this one acutally changes tick labels
                  'svg.fonttype'   : 'none',   # plot text as text - not paths or clones or other nonsense
                  'axes.linewidth' : .5, 
@@ -31,7 +31,7 @@ plt.rcParams.update(mplparams)
 # add time stamps X
 # isolines instead of pixels
 
-C,R = 4,5 # number of columns and rows in plot
+C,R = 4,4 # number of columns and rows in plot
 
 field="lwp"
 vmin=0
@@ -50,7 +50,7 @@ dtRow   = 120 # s
 expname = 'bubble'
 
 
-def makeplot(dirname, field, t_start, dtRow, vmin, vmax):
+def makeplot(dirname, field, t_start, dtRow, vmin, vmax, colorbar=False):
     fig, axes = plt.subplots(R, C, sharex=True, sharey=True, squeeze=False)
     fig.suptitle(dirname + ' ' + field)
     for i in range(C):
@@ -66,7 +66,7 @@ def makeplot(dirname, field, t_start, dtRow, vmin, vmax):
             #                break
             try:
                 v=dales_surf[field][ti]
-                axes[j,i].imshow(v, origin='lower', vmin=vmin,vmax=vmax)
+                im=axes[j,i].imshow(v, origin='lower', vmin=vmin,vmax=vmax)
                 print(v.min(), v.max())
             except:
                 pass
@@ -93,8 +93,18 @@ def makeplot(dirname, field, t_start, dtRow, vmin, vmax):
         # calculate average over time
         for ti in range(0, 10):
             lwp_avg[(dirname, i, ti, field)] = dales_surf[field][ti][:,:].sum()
+
+    if colorbar: # add color bars for this plot
+        cax = fig.add_axes([0.2, 0.05, 0.3, 0.03]) #horizontal colorbar
+        cbar = fig.colorbar(im, cax=cax, orientation='horizontal')
+        tick_locator = ticker.MaxNLocator(nbins=4)
+        cbar.locator = tick_locator
+        cbar.update_ticks()
+        cbar.set_label('kg/m$^2$')
+    
     plt.subplots_adjust(left=.01, top=.99, bottom=.1, right=.99, wspace=.01, hspace=.01)
     plt.savefig(dirname+'_'+field+'.png')
+    plt.savefig(dirname+'_'+field+'.svg')
 
 lwp_avg = {}   # lwp_avg[('name',column,time_index)] = sum(lwp) / (itot*jtot)
 
@@ -102,7 +112,8 @@ E = ('-coupled', '-coupled-var-T')  # '-coupled', '-coupled-var', '-coupled-var-
 for field in 'lwp', 'twp':
     for extension in E:
         dirname = expname+extension
-        makeplot(dirname, field, t_start, dtRow, vmin[field], vmax[field])
+        colorbar = (extension == '-coupled-var-T')
+        makeplot(dirname, field, t_start, dtRow, vmin[field], vmax[field], colorbar)
     
 
 for extension in E:
@@ -159,9 +170,12 @@ for field in 'lwp', 'twp':
     #cbar.ax.yaxis.set_major_locator(ticker.AutoLocator())
     cbar.update_ticks()
     cbar.set_label('kg/m$^2$')
-    plt.subplots_adjust(left=.1, top=.99, bottom=.1, right=.99, wspace=.03, hspace=.03)
+    plt.subplots_adjust(left=.01, top=.99, bottom=.1, right=.99, wspace=.01, hspace=.01)
+    
     plt.savefig(dirname+'_'+field+'.png')
+    plt.savefig(dirname+'_'+field+'.svg')
 
-plt.show()        
+if False:
+    plt.show()        
 
 
