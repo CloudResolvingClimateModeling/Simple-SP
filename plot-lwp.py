@@ -28,24 +28,19 @@ plt.rcParams.update(mplparams)
 
 
 #   wishes
-# add time stamps X
 # isolines instead of pixels
 
 C,R = 4,4 # number of columns and rows in plot
 
 field="lwp"
-vmin=0
-vmax=.2
 #field="twp"
-#vmin=31.7
-#vmax=32.5
+
 vmin={'lwp' : 0,
       'twp' : 35}
 vmax={'lwp' : .2,
       'twp' : 37}
 
-
-t_start = 60 # s
+t_start = 60  # s
 dtRow   = 120 # s
 expname = 'bubble'
 
@@ -61,25 +56,13 @@ def makeplot(dirname, field, t_start, dtRow, vmin, vmax, colorbar=False):
         for j in range(R):
             T = t_start + j * dtRow
             ti = max(T  / (dales_surf["time"][1] -  dales_surf["time"][0]) -1,0)
-            print(T, dales_surf["time"][ti])
-            #            if extension == '-coupled-var' and ti >= 9:
-            #                break
+            # print(T, dales_surf["time"][ti])
             try:
                 v=dales_surf[field][ti]
                 im=axes[j,i].imshow(v, origin='lower', vmin=vmin,vmax=vmax)
-                print(v.min(), v.max())
+                #print(v.min(), v.max())
             except:
                 pass
-
-            # hide internal tick marks
-            #if i==0:
-            #    axes[j][i].yaxis.set_ticks_position('left')
-            #else:
-            #    axes[j][i].yaxis.set_ticks_position('none')
-            #if j==R-1:
-            #    axes[j][i].xaxis.set_ticks_position('bottom')
-            #else:
-            #   axes[j][i].xaxis.set_ticks_position('none')
 
             # hide all tick marks and labels
             axes[j][i].axis('off') 
@@ -115,16 +98,16 @@ for field in 'lwp', 'twp':
         colorbar = (extension == '-coupled-var-T')
         makeplot(dirname, field, t_start, dtRow, vmin[field], vmax[field], colorbar)
     
-
-for extension in E:
-    dirname = expname+extension
-    print (dirname)
-    for ti in range(0,10):
-        print('%2d: '%ti, end='')
-        for i in range(0,C):
-            print('%5.3f'%lwp_avg[(dirname, i, ti, field)], end=' ')
-        print()
-    print()
+# measuring average LWP over time
+#for extension in E:
+#    dirname = expname+extension
+#    print (dirname)
+#    for ti in range(0,10):
+#        print('%2d: '%ti, end='')
+#        for i in range(0,C):
+#            print('%5.3f'%lwp_avg[(dirname, i, ti, field)], end=' ')
+#        print()
+#    print()
 
 
 # Plotting the single wide LES run
@@ -139,7 +122,7 @@ for field in 'lwp', 'twp':
     workdir = '%s_%d_%d'%(dirname,0,0)
     filename=workdir+"/"+"cape.x000y000.001.nc"
     crossxz_filename=workdir+"/"+"crossxz.x000y000.001.nc"
-    print(filename)
+    # print(filename)
     dales_surf = Dataset(filename, "r")
     dales_crossxz = Dataset(crossxz_filename, "r")
     for i in range(C):
@@ -147,7 +130,7 @@ for field in 'lwp', 'twp':
             for j in range(R):
                 T = t_start + j * dtRow
                 ti = max(T / (dales_surf["time"][1] -  dales_surf["time"][0]) -1,0)
-                print(T, dales_surf["time"][ti])
+                #print(T, dales_surf["time"][ti])
                 timestamp = '%3.0f s'%dales_surf["time"][ti] 
                 lwp=dales_surf[field][ti]
                 im=axes[j,i].imshow(lwp, origin='lower', vmin=vmin[field],vmax=vmax[field])
@@ -157,7 +140,7 @@ for field in 'lwp', 'twp':
             for j in range(R):
                 T = t_start + j * dtRow
                 ti = max(T  / (dales_surf["time"][1] -  dales_surf["time"][0]) -1,0)
-                print(T, dales_surf["time"][ti])
+                #print(T, dales_surf["time"][ti])
                 lwp=dales_crossxz["qtxz"][ti]
                 im_v=axes[j,i].imshow(lwp, origin='lower', vmin=0,vmax=0.02)
 
