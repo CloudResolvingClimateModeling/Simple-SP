@@ -26,11 +26,11 @@ log = logging.getLogger(__name__)
 # Physical constants
 pref0 = 1e5 | units.Pa    # Pa reference pressure
 rd    = 287.04 | units.J/units.kg/units.K # gas constant for dry air.  J/kg K.
-rv    = 461.5 | units.J/units.kg/units.K   # gas constant for water vapor. J/kg K.
-cp    = 1004. | units.J/units.kg/units.K   # specific heat at constant pressure (dry air).
+rv    = 461.5 | units.J/units.kg/units.K  # gas constant for water vapor. J/kg K.
+cp    = 1004. | units.J/units.kg/units.K  # specific heat at constant pressure (dry air).
 rlv   = 2.53e6 | units.J/units.kg   # latent heat for vaporisation
 grav  = 9.81  | units.m/units.s**2  # gravity acceleration. m/s^2
-mair  = 28.967 | units.g/units.mol # Molar mass of air
+mair  = 28.967 | units.g/units.mol  # molar mass of air
 
 
 # Exner function
@@ -49,15 +49,13 @@ qt_forcings = {"sp": Dales.QT_FORCING_GLOBAL,
 
 def initBomex(i, j, itot = 25, jtot = 25, dx=100 | units.m, qt_delta = 0 | units.g / units.kg, dirname='dales', nudge=None):
     workdir = '%s_%d_%d'%(dirname,j,i)
-    subprocess.call(["rm", workdir, "-rf"]) # remove a previous work-dir if it exists - TODO handle better
+    subprocess.call(["rm", workdir, "-rf"]) # remove a previous work-dir if it exists
 
-    #inputdir='/home/jansson/code/omuse/src/omuse/community/dales/dales-repo/cases/bomex'
-    inputdir='bomexh' # own bomex case with U velocity in positive direction. bomexh has extra vertical levels
+    inputdir='bomexh' # own bomex case with U velocity in positive direction. bomexh has extra vertical levels.
     d = Dales(inputdir=inputdir, number_of_workers=1, workdir=workdir, channel_type='sockets',
               redirection='none')
               #redirect_stdout_file='dales-output-%s'%workdir,
               #redirect_stderr_file='dales-error-%s'%workdir)
-    # case='bomex'
     
     d.parameters_DOMAIN.itot = itot  # number of grid cells in x
     d.parameters_DOMAIN.jtot = jtot  # number of grid cells in y
@@ -84,8 +82,8 @@ def initBomex(i, j, itot = 25, jtot = 25, dx=100 | units.m, qt_delta = 0 | units
         
     d.commit_parameters()
     d.commit_grid()
-
-    #d.grid[:,:,:].QT -= i * 0.5 | units.g / units.kg
+    
+    # optionally apply a bias in qt
     d.fields[:,:,:].QT += i * qt_delta
     return d
 
@@ -128,8 +126,8 @@ def test_advect():
     advect(Q, U, 2500 | units.m, 10 | units.s)
     print(Q[0,:,2])
 
-# create a bubble perturbation, given a DALES grid which is used for grid size and coordinates
-# if gaussian=True, a gaussian perturbation is generated, with standard deviation r, otherwise a
+# Create a bubble perturbation, given a DALES grid which is used for grid size and coordinates.
+# If gaussian=True, a gaussian perturbation is generated, with standard deviation r, otherwise a
 # constant perturbation is generated inside a sphere of radius r.
 #
 # r, center are quantities, i.e. numbers with units.
@@ -141,7 +139,6 @@ def make_bubble(grid, r, center, gaussian=False):# r, center are quantities, i.e
     else:
         return numpy.where (rr < r*r, 1, 0)
 
-# try without units, for speed.    
 def variability_nudge(les, ql_ref, DT, constantT=False):
     # this cannot be used before the LES has been stepped - otherwise qsat and ql are not defined.
 
@@ -213,18 +210,13 @@ def variability_nudge(les, ql_ref, DT, constantT=False):
             # Nudge towards just below saturation.
             i, j = numpy.unravel_index(numpy.argmax(qt[:, :, k] - qsat[:, :, k]), qt[:, :, k].shape)
             beta[k] = (qsat[i, j, k] - qt_av[k]) / (qt[i, j, k] - qt_av[k])
-            # print (qt[i,j,k].value_in(units.mfu))
-            # print (qsat[i,j,k].value_in(units.mfu))
-            # print(qt_av[k].value_in(units.mfu))
-            # print(ql[k].value_in(units.mfu))
-            # print(les.ql_ref[k].value_in(units.mfu))
             #log.info(
             #    '%d nudging towards non-saturation. Max at (%d,%d). qt:%f, qsat:%f, qt_av[k]:%f, beta:%f, ql_avg:%f, '
             #    'ql_ref:%f' % (k, i, j, qt[i, j, k].value_in(units.mfu), qsat[i, j, k].value_in(units.mfu),
             #                   qt_av[k].value_in(units.mfu), beta[k], ql[k].value_in(units.mfu), ql_ref[k].value_in(units.mfu)))
             if beta[k] < 0:
                 # this happens when qt_av > qsat
-  #              log.info('  beta<0, setting beta=1 ')
+                # log.info('  beta<0, setting beta=1 ')
                 beta[k] = 1
         else:
             continue  # no clouds, no nudge - don't print anything
@@ -233,7 +225,7 @@ def variability_nudge(les, ql_ref, DT, constantT=False):
             log.info('  beta %f too large at %3d'%(beta[k], k))
 
             # try additive noise instead
-            # Add the random noise field defined in the beginning, with amplitude a.
+            # add the random noise field defined in the beginning, with amplitude a.
             # solve for the a needed to match ql in this layer 
             a_min = 0
             a_max = 5
@@ -256,15 +248,14 @@ def variability_nudge(les, ql_ref, DT, constantT=False):
             dQT = (beta[k]-1) * (qt[:,:,k] - qt_av[k])
             qt[:,:,k] += dQT
         if constantT:
-            #ql_target = numpy.maximum((beta[k] * (qt[:, :, k] - qt_av[k]) + qt_av[k] - qsat[:, :, k]), 0) # wrong!
-            #ql_target = numpy.maximum((qt[:, :, k] + (a * R[:,:]) - qsat[:, :, k]), 0)
-            #ql_target = numpy.maximum((qt[:, :, k] + dQT - qsat[:, :, k]), 0)
+            # calculate change in theta_l (dTHL) required to keep *temperature*
+            # constant, when qt changes
             ql_target = numpy.maximum((qt[:, :, k] - qsat[:, :, k]), 0)
             dQL = ql_target - ql[:,:,k]
             dTHL = - rlv.number / (cp.number * exner(p[k])) * dQL
             thl[:,:,k] += dTHL
-            #les.fields[:,:,k].THL += dTHL | units.K
 
+    # write qt and thl fields back to the LES
     les.fields.QT = qt
     if constantT:
         les.fields.THL = thl | units.K
@@ -416,54 +407,26 @@ def run_single(steps=60, DT=60 | units.s, n=25, nx=4, ny=1, qt_delta=0|units.g/u
     d.stop()
         
 
-# with different qt at different grid points
-#run       (steps=360, DT=60 | units.s,  qt_delta=-1|units.shu, nx=4, ny=1, couple=False, name='dales')
-#run       (steps=360, DT=60 | units.s,  qt_delta=-1|units.shu, nx=4, ny=1, couple=True,  name='dales-coupled')
-#run_single(steps=360, DT=60 | units.s,  qt_delta=-1|units.shu, nx=4, ny=1, name='dales-single')
-
-# add moist bubble at leftmost grid point
-
+# add moist bubble in the leftmost DALES
 A = 1.5 | units.g/units.kg
 
-#run       (steps=30, DT=60 | units.s, nx=4, ny=1,  couple=False, name='bubble', bubble=True, bubbleA=A)
+# uncoupled models
+#run       (steps=30, DT=60 | units.s, nx=4, ny=1,  couple=False, name='bubble', bubble=True, bubbleA=A)  
+
+# coupled models - regular SP
 run       (steps=30, DT=60 | units.s, nx=4, ny=1, couple=True, name='bubble-coupled', bubble=True, bubbleA=A)
+
+# single wide DALES
 run_single(steps=30, DT=60 | units.s, nx=4, ny=1, name='bubble-single', bubble=True, bubbleA=A)
 
-# with variance nudging
+# SP with variance nudging at constant thl
 # run       (steps=30, DT=60 | units.s, nx=4, ny=1, couple=True, name='bubble-coupled-var', bubble=True, bubbleA=A, nudge='variance')
 # with variance nudging at constant T
+
+# SP with variance nudging at constant thl
 run       (steps=30, DT=60 | units.s, nx=4, ny=1, couple=True, name='bubble-coupled-var-T', bubble=True, bubbleA=A, nudge='variance', constantT=True)
 
-# + spinup - still crashes
-#run       (steps=30, DT=60 | units.s, spinup=3600 | units.s, nx=4, ny=1, couple=True, name='bubble-coupled-var-spinup', bubble=True, bubbleA=A, nudge='variance')
-
-# with strong nudging
-# run       (steps=30, DT=60 | units.s, nx=4, ny=1, couple=True, name='bubble-coupled-strong', bubble=True, bubbleA=A, nudge='strong')
 
 
 
-
-
-
-
-# wishlist
-# set up cases with position-dependent perturbation X
-#   - where should this be done? initBomex function, pass it i,j  X
-#
-# use own input case directory for more options? X
-#  - no subsidence                              TODO
-#  - output: LWP surface field, 3D fields?
-#  - less statistics, for it is slow X
-#
-# get current state and output it.   X
-#   - profiles, needed for SP anyway
-
-# 4 runs:
-# one big DALES with gradient or steps in QT             X
-# 4 independent DALES with different QT                  X
-# basic SP: advect averages from one LES to the next     X
-# improved SP: advect also variability
-#
-# plotting
-#
 
