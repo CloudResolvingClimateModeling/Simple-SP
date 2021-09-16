@@ -1,0 +1,36 @@
+{
+    "creators": [
+	{
+            "orcid": "0000-0003-4712-5938", 
+            "name": "Fredrik Jansson",
+	    "affiliation": "TU Delft"
+	}, 
+	{
+            "orcid": "0000-0001-8367-1333", 
+            "name": "Gijs van den Oord",
+	    "affiliation": "Netherlands eScience Center"
+	},
+	{
+            "orcid": "0000-0002-8024-0412",
+            "name": "Inti Pelupessy",
+	    "affiliation": "Netherlands eScience Center"
+	},
+	{
+            "name": "Maria Chertova",
+	    "affiliation": "Netherlands eScience Center"  
+	}, 
+	{
+            "orcid": "0000-0002-8754-2501",
+            "name": "Johanna H. Grönqvist"
+	},
+	{
+            "orcid": "0000-0002-7751-5999",
+            "name": "Pier Siebesma",
+            "affiliation": "TU Delft" 
+	},
+	{
+            "name": "Daan Crommelin",
+	    "affiliation": "CWI"
+	}    
+    ]
+}
