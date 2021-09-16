@@ -11,7 +11,7 @@ from netCDF4 import Dataset, num2date, date2index # pip install netCDF4
 
 
 # plot results from simple-SP
-# assuming each Dales was run with one process - no merging implemented in this script yet
+# assuming each DALES was run with one process - no merging implemented in this script yet
 # Each row is one time point, columns show different DALES.
 
 mplparams = {"figure.figsize" : [3.47, 3.8],    # figure size in inches
@@ -26,14 +26,7 @@ mplparams = {"figure.figsize" : [3.47, 3.8],    # figure size in inches
     }
 plt.rcParams.update(mplparams)
 
-
-#   wishes
-# isolines instead of pixels
-
 C,R = 4,4 # number of columns and rows in plot
-
-field="lwp"
-#field="twp"
 
 vmin={'lwp' : 0,
       'twp' : 35}
@@ -97,17 +90,6 @@ for field in 'lwp', 'twp':
         dirname = expname+extension
         colorbar = (extension == '-coupled-var-T')
         makeplot(dirname, field, t_start, dtRow, vmin[field], vmax[field], colorbar)
-    
-# measuring average LWP over time
-#for extension in E:
-#    dirname = expname+extension
-#    print (dirname)
-#    for ti in range(0,10):
-#        print('%2d: '%ti, end='')
-#        for i in range(0,C):
-#            print('%5.3f'%lwp_avg[(dirname, i, ti, field)], end=' ')
-#        print()
-#    print()
 
 
 # Plotting the single wide LES run
@@ -144,13 +126,11 @@ for field in 'lwp', 'twp':
                 lwp=dales_crossxz["qtxz"][ti]
                 im_v=axes[j,i].imshow(lwp, origin='lower', vmin=0,vmax=0.02)
 
-    #cax = fig.add_axes([0.48, 0.05, 0.03, 0.3]) #verttical,  when showing qt also
-    #cax = fig.add_axes([0.85, 0.05, 0.03, 0.3]) #vertical colorbar
     cax = fig.add_axes([0.2, 0.05, 0.3, 0.03]) #horizontal colorbar
     cbar = fig.colorbar(im, cax=cax, orientation='horizontal')
     tick_locator = ticker.MaxNLocator(nbins=4)
     cbar.locator = tick_locator
-    #cbar.ax.yaxis.set_major_locator(ticker.AutoLocator())
+
     cbar.update_ticks()
     cbar.set_label('kg/m$^2$')
     plt.subplots_adjust(left=.01, top=.99, bottom=.1, right=.99, wspace=.01, hspace=.01)

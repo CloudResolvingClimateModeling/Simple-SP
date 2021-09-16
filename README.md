@@ -18,9 +18,20 @@ and the DALES model within OMUSE. See the
 * Activate the OMUSE virtual environment
 
 ```
-python simple-sp.py # run simulations, 10 minutes on 4-core desktop
+python simple-SP.py # run simulations, 10 minutes on 4-core desktop
 python plot-lwp.py  # plot result
 ```
+
+(Instructions tested on Ubuntu 21.04, with OMUSE 2021.6.2.dev14+gf2bbc23).
+
+The script is set up to perform three simulations with a moist bubble perturbation in the initial state:
+
+* a single, wide LES
+
+* a traditional superparameterization with four LES domains
+
+* a modified superparameterization with four LES domains, where the moisture variability is coupled
+
 
 ## References
 

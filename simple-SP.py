@@ -2,7 +2,7 @@
 
 # Simple SP demonstration.
 # A grid of LES models coupled to a global model consisting only of large-scale advection
-# Fredrik Jansson, CWI, 2019-2020
+# Fredrik Jansson, CWI and TU Delft, 2019-2021
 #
 
 
@@ -101,10 +101,6 @@ def evolve(grid, time):
 # upwind advection of quantity q, with velocity u
 # assuming velocity is positive and constant in x, y 
 def advect(q, u, dx, dt):
-    # boundaries are NOT periodic, and probably inconsistent. the leftmost value does not change.
-    #dq = (q[:,:-1, :] - q[:, 1:, :]) * u * dt / dx
-    #q[:, 1:, :] += dq
-
     # periodic boundaries:
     qm = numpy.roll(q.number, 1, axis=1) | q.unit # qm(j,i,k) = q(j,i-1,k), periodic
     dq = (qm - q) * u * dt / dx
@@ -139,9 +135,10 @@ def make_bubble(grid, r, center, gaussian=False):# r, center are quantities, i.e
     else:
         return numpy.where (rr < r*r, 1, 0)
 
+# Adjust the moisture varibility in an LES domain, so that the specific liquid water 
+# profile ql matches the provided ql_ref.
+# This cannot be used before the LES has been stepped - otherwise qsat and ql are not defined.
 def variability_nudge(les, ql_ref, DT, constantT=False):
-    # this cannot be used before the LES has been stepped - otherwise qsat and ql are not defined.
-
     itot, jtot = les.get_itot(), les.get_jtot()
         
     # random field to be used for additive noise when variability is very small
@@ -267,14 +264,14 @@ def variability_nudge(les, ql_ref, DT, constantT=False):
 
     #qt_std = qt.std(axis=(0, 1))
 
-    
+
+# Performs a superparameterized simulation, where the large-scale model performs only advection using an upwind scheme.
 def run(steps=60, DT=60 | units.s, spinup = 0 | units.s, nx=4, ny=1, n=25, qt_delta=0|units.g/units.kg, name='dales',
         couple=False, bubble=False, bubbleA=1|units.g/units.kg, nudge=None, constantT=False):
     
     dx=100 | units.m     # small-scale grid size
     DX=n*dx              # large-scale grid size = horizontal size of the LES 
-
-    # note CFL on the large scale: need U * DT < DX. U ~= 10 m/s
+                         # note CFL on the large scale: need U * DT < DX. U ~= 10 m/s
 
     grid = [[initBomex(i,j,dirname=name,itot=n,jtot=n,dx=dx,nudge=nudge) for i in range(nx)] for j in range(ny)]
 
@@ -337,9 +334,6 @@ def run(steps=60, DT=60 | units.s, spinup = 0 | units.s, nx=4, ny=1, n=25, qt_de
             print ('QL target profile 2')
             print (QL[0,2,:])
             
-
-
-            
         print ('Evolving to ', DT*ti + spinup)
         evolve(grid, DT*ti + spinup)
 
@@ -354,9 +348,6 @@ def run(steps=60, DT=60 | units.s, spinup = 0 | units.s, nx=4, ny=1, n=25, qt_de
                                   ('z',   units.m)):
                     state[(ti,i,j,var)]   = getattr(grid[j][i].profiles, var).value_in(unit)
         state['time'].append((DT*ti).value_in(units.s))
-
-
-                
         
     filename='result%s.pickle'%('-coupled' if couple else '')
     with open(filename, 'wb') as f:
@@ -421,9 +412,8 @@ run_single(steps=30, DT=60 | units.s, nx=4, ny=1, name='bubble-single', bubble=T
 
 # SP with variance nudging at constant thl
 # run       (steps=30, DT=60 | units.s, nx=4, ny=1, couple=True, name='bubble-coupled-var', bubble=True, bubbleA=A, nudge='variance')
-# with variance nudging at constant T
 
-# SP with variance nudging at constant thl
+# SP with variance nudging at constant T
 run       (steps=30, DT=60 | units.s, nx=4, ny=1, couple=True, name='bubble-coupled-var-T', bubble=True, bubbleA=A, nudge='variance', constantT=True)
 
 
