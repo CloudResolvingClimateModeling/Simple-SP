@@ -1,3 +1,5 @@
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.5511753.svg)](https://doi.org/10.5281/zenodo.5511753)
+
 # Simple-SP
 Simple superparameterization example in Python using the DALES model
 
